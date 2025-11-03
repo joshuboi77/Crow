@@ -227,7 +227,7 @@ const InitializeSchema = z.object({
 // Register all tools
 registerTool(
   "crow_setup",
-  "Set up Ruff/Black formatting, pre-commit hooks, and CI for an existing Python project. Safe to run multiple times.",
+  "Set up Ruff/Black formatting, pre-commit hooks, and CI for any Python project (libraries, web apps, CLI tools, scripts, etc.). Works on existing projects. Safe to run multiple times - only adds missing configuration.",
   SetupSchema,
   (input) => {
     const args: string[] = [];
@@ -245,7 +245,7 @@ registerTool(
 
 registerTool(
   "crow_initialize",
-  "Bootstrap a new Python CLI project with template code, formatting setup, and Feza-compatible entry points.",
+  "Create a new Python CLI tool from scratch: generates main.py template with argparse, sets up formatting/CI, and creates command-line entry points. Use this when starting a brand new CLI tool project.",
   InitializeSchema,
   (input) => {
     const args: string[] = ["--initialize"];
