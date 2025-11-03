@@ -86,6 +86,41 @@ function detectProjectRoot(): string {
 }
 
 /**
+ * Resolve command path, checking PATH and common Homebrew locations
+ */
+function resolveCommand(cmd: string): string {
+  // Try PATH first
+  try {
+    const whichResult = execSync(`which ${cmd}`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    if (whichResult && existsSync(whichResult)) {
+      return whichResult;
+    }
+  } catch {
+    // which failed, continue to Homebrew checks
+  }
+
+  // Try common Homebrew locations
+  const homebrewPaths = [
+    "/opt/homebrew/bin", // Apple Silicon
+    "/usr/local/bin",    // Intel Mac / Linux with Homebrew
+    process.env.HOMEBREW_PREFIX ? `${process.env.HOMEBREW_PREFIX}/bin` : null,
+  ].filter(Boolean) as string[];
+
+  for (const basePath of homebrewPaths) {
+    const fullPath = path.join(basePath, cmd);
+    if (existsSync(fullPath)) {
+      return fullPath;
+    }
+  }
+
+  // Fallback: return original command (spawn will handle the error)
+  return cmd;
+}
+
+/**
  * Run Crow command and return result
  */
 function runCrow(
@@ -93,9 +128,9 @@ function runCrow(
   cwd?: string
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const cmd = "crow";
+    const cmdPath = resolveCommand("crow");
     const workingDir = cwd || detectProjectRoot();
-    const childProcess = spawn(cmd, args, {
+    const childProcess = spawn(cmdPath, args, {
       cwd: workingDir,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -121,11 +156,19 @@ function runCrow(
     });
 
     childProcess.on("error", (error: Error) => {
-      resolve({
-        code: 1,
-        stdout: "",
-        stderr: `Failed to spawn crow: ${error.message}`,
-      });
+      if (error.message.includes("ENOENT")) {
+        resolve({
+          code: 1,
+          stdout: "",
+          stderr: `crow command not found. Install with: brew install crow\nOr ensure crow is on your PATH.\nOriginal error: ${error.message}`,
+        });
+      } else {
+        resolve({
+          code: 1,
+          stdout: "",
+          stderr: `Failed to spawn crow: ${error.message}`,
+        });
+      }
     });
   });
 }
