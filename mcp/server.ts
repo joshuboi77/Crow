@@ -1,0 +1,349 @@
+#!/usr/bin/env node
+/**
+ * Crow MCP Server
+ * 
+ * Model Context Protocol server that exposes Crow CLI commands as tools
+ * for use in Cursor and other MCP-compatible IDEs.
+ */
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ErrorCode,
+  McpError,
+} from "@modelcontextprotocol/sdk/types.js";
+import { spawn } from "node:child_process";
+import { z } from "zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const server = new Server(
+  {
+    name: "crow-mcp",
+    version: "0.1.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+/**
+ * Run Crow command and return result
+ */
+function runCrow(
+  args: string[],
+  cwd?: string
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const cmd = "crow";
+    const workingDir = cwd || process.cwd();
+    const childProcess = spawn(cmd, args, {
+      cwd: workingDir,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    childProcess.stdout?.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    childProcess.stderr?.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    childProcess.on("close", (code: number | null) => {
+      resolve({
+        code: code ?? 1,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+      });
+    });
+
+    childProcess.on("error", (error: Error) => {
+      resolve({
+        code: 1,
+        stdout: "",
+        stderr: `Failed to spawn crow: ${error.message}`,
+      });
+    });
+  });
+}
+
+// Tool registry
+const tools: Array<{
+  name: string;
+  description: string;
+  schema: z.ZodTypeAny;
+  toArgs: (input: any) => string[];
+}> = [];
+
+/**
+ * Register a tool with the MCP server
+ */
+function registerTool(
+  name: string,
+  description: string,
+  schema: z.ZodTypeAny,
+  toArgs: (input: any) => string[]
+) {
+  tools.push({ name, description, schema, toArgs });
+}
+
+// Tool schemas using Zod
+const SetupSchema = z.object({
+  projectRoot: z
+    .string()
+    .optional()
+    .describe("Project root directory (default: current directory)"),
+  python: z
+    .string()
+    .optional()
+    .describe("Python version for CI/tools (default: 3.11)"),
+  ruffOnly: z
+    .boolean()
+    .optional()
+    .describe("Skip Black; use Ruff formatter only"),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe("Show what would be done without making changes"),
+  noFormat: z
+    .boolean()
+    .optional()
+    .describe("Skip formatting existing code files"),
+  noInstallHooks: z
+    .boolean()
+    .optional()
+    .describe("Skip installing pre-commit hooks"),
+  noVenv: z
+    .boolean()
+    .optional()
+    .describe("Skip creating .venv; use system tools instead"),
+  cwd: z.string().optional().describe("Working directory (default: current)"),
+});
+
+const InitializeSchema = z.object({
+  name: z.string().optional().describe("Tool name (non-interactive mode)"),
+  description: z
+    .string()
+    .optional()
+    .describe("Tool description (non-interactive mode)"),
+  version: z
+    .string()
+    .optional()
+    .describe("Initial version (non-interactive mode, default: 0.1.0)"),
+  projectRoot: z
+    .string()
+    .optional()
+    .describe("Project root directory (default: current directory)"),
+  python: z
+    .string()
+    .optional()
+    .describe("Python version for CI/tools (default: 3.11)"),
+  ruffOnly: z
+    .boolean()
+    .optional()
+    .describe("Skip Black; use Ruff formatter only"),
+  dryRun: z
+    .boolean()
+    .optional()
+    .describe("Show what would be done without making changes"),
+  noFormat: z
+    .boolean()
+    .optional()
+    .describe("Skip formatting existing code files"),
+  noInstallHooks: z
+    .boolean()
+    .optional()
+    .describe("Skip installing pre-commit hooks"),
+  noVenv: z
+    .boolean()
+    .optional()
+    .describe("Skip creating .venv; use system tools instead"),
+  cwd: z.string().optional().describe("Working directory (default: current)"),
+});
+
+// Register all tools
+registerTool(
+  "crow_setup",
+  "Setup formatting and linting for a Python repository",
+  SetupSchema,
+  (input) => {
+    const args: string[] = [];
+    if (input.projectRoot) args.push("--project-root", input.projectRoot);
+    if (input.python) args.push("--python", input.python);
+    if (input.ruffOnly) args.push("--ruff-only");
+    if (input.dryRun) args.push("--dry-run");
+    if (input.noFormat) args.push("--no-format");
+    if (input.noInstallHooks) args.push("--no-install-hooks");
+    if (input.noVenv) args.push("--no-venv");
+    return args;
+  }
+);
+
+registerTool(
+  "crow_initialize",
+  "Initialize a new Python project with formatting setup",
+  InitializeSchema,
+  (input) => {
+    const args: string[] = ["--initialize"];
+    if (input.name) args.push("--name", input.name);
+    if (input.description) args.push("--description", input.description);
+    if (input.version) args.push("--version", input.version);
+    if (input.projectRoot) args.push("--project-root", input.projectRoot);
+    if (input.python) args.push("--python", input.python);
+    if (input.ruffOnly) args.push("--ruff-only");
+    if (input.dryRun) args.push("--dry-run");
+    if (input.noFormat) args.push("--no-format");
+    if (input.noInstallHooks) args.push("--no-install-hooks");
+    if (input.noVenv) args.push("--no-venv");
+    return args;
+  }
+);
+
+// Helper to convert Zod schema to JSON Schema
+function zodToJsonSchema(zodSchema: z.ZodTypeAny): any {
+  // Basic implementation that handles ZodObject schemas
+  const shape = zodSchema._def;
+  if (shape.typeName === "ZodObject") {
+    const jsonSchema: any = {
+      type: "object",
+      properties: {},
+      required: [],
+    };
+    const objShape = shape.shape();
+    for (const [key, value] of Object.entries(objShape)) {
+      const field = value as z.ZodTypeAny;
+      let fieldDef = field._def;
+      let isOptional = false;
+      
+      // Handle ZodOptional
+      if (fieldDef.typeName === "ZodOptional") {
+        isOptional = true;
+        fieldDef = fieldDef.innerType._def;
+      }
+      
+      // Handle ZodDefault (which wraps ZodOptional sometimes)
+      if (fieldDef.typeName === "ZodDefault") {
+        isOptional = true;
+        fieldDef = fieldDef.innerType._def;
+        // Handle nested ZodOptional
+        if (fieldDef.typeName === "ZodOptional") {
+          fieldDef = fieldDef.innerType._def;
+        }
+      }
+      
+      // Extract description
+      const description = fieldDef.description || (field as any).description;
+      
+      if (fieldDef.typeName === "ZodString") {
+        jsonSchema.properties[key] = { type: "string", description };
+      } else if (fieldDef.typeName === "ZodNumber") {
+        jsonSchema.properties[key] = { type: "number", description };
+      } else if (fieldDef.typeName === "ZodBoolean") {
+        jsonSchema.properties[key] = { type: "boolean", description };
+      } else {
+        jsonSchema.properties[key] = { description };
+      }
+      
+      if (!isOptional) {
+        jsonSchema.required.push(key);
+      }
+    }
+    return jsonSchema;
+  }
+  return { type: "object" };
+}
+
+// Register request handlers
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: tools.map((tool) => {
+      const schema = zodToJsonSchema(tool.schema);
+      return {
+        name: tool.name,
+        description: tool.description,
+        inputSchema: schema,
+      };
+    }),
+  };
+});
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) {
+    throw new McpError(
+      ErrorCode.MethodNotFound,
+      `Tool not found: ${name}`
+    );
+  }
+
+  try {
+    // Validate input with Zod schema
+    const validatedInput = tool.schema.parse(args || {});
+    
+    // Convert to Crow CLI args
+    const crowArgs = tool.toArgs(validatedInput);
+    const cwd = validatedInput.cwd;
+
+    // Execute Crow command
+    const result = await runCrow(crowArgs, cwd);
+
+    if (result.code !== 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${result.stderr || "Unknown error"}\n${result.stdout}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: result.stdout || "Success",
+        },
+      ],
+    };
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid parameters: ${error.errors.map((e) => e.message).join(", ")}`
+      );
+    }
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Tool execution failed: ${error.message}`
+    );
+  }
+});
+
+// Start the server
+async function main() {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Crow MCP server running on stdio");
+}
+
+main().catch((error) => {
+  console.error("Fatal error in main():", error);
+  process.exit(1);
+});
+
