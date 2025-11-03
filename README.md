@@ -1,0 +1,307 @@
+# Crow | A Smart Ruff Black Bird [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/) [![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+> One-shot formatter enforcer for Python repos. Sets up Ruff, Black, pre-commit hooks, CI workflows, and more—all in a single command.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [What Gets Created](#what-gets-created)
+- [Integration with Feza](#integration-with-feza)
+- [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
+- [Requirements](#requirements)
+- [Idempotency](#idempotency)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+
+- **Complete setup**: Configures formatting, linting, and CI in one go
+- **Idempotent**: Safe to run multiple times; only adds missing pieces
+- **Auto-formatting**: Formats existing code automatically
+- **Virtual environment**: Automatically creates `.venv` and installs dependencies
+- **Project initialization**: Bootstrap new Python CLI projects with `--initialize`
+- **Feza-compatible**: Creates proper `pyproject.toml` entry points for release tooling
+
+## Installation
+
+### Prerequisites
+
+- Python 3.11 or higher
+- `pip` package manager
+
+### Via Homebrew (Recommended)
+
+```bash
+brew tap joshuboi77/crow
+brew install crow
+```
+
+### Via pip
+
+```bash
+pip install crow
+```
+
+Or with a specific version:
+```bash
+pip install crow>=0.1.0
+```
+
+### From source
+
+```bash
+git clone https://github.com/joshuboi77/Crow.git
+cd Crow
+pip install -e .
+```
+
+## Quick Start
+
+### For Existing Projects
+
+Run Crow in your Python project directory:
+
+```bash
+crow
+```
+
+This will:
+1. Create `.venv` and install Ruff, pre-commit (and Black if not using `--ruff-only`)
+2. Set up `.editorconfig`, `.pre-commit-config.yaml`, `pyproject.toml`
+3. Create/update GitHub Actions CI workflow
+4. Add dependencies to `requirements-dev.txt`
+5. Format all existing Python files
+6. Install pre-commit hooks
+
+### For New Projects
+
+Initialize a new Python CLI project:
+
+```bash
+crow --initialize
+```
+
+This will:
+1. Create a `main.py` template
+2. Prompt for tool name, description, and version
+3. Set up complete `pyproject.toml` with entry point (Feza-compatible)
+4. Configure all formatting infrastructure
+
+**Non-interactive mode:**
+```bash
+crow --initialize --name mytool --description "My awesome CLI tool" --version 0.1.0
+```
+
+## Usage
+
+### Basic Usage
+
+```bash
+# Run in current directory
+crow
+
+# Specify project root
+crow --project-root /path/to/project
+
+# Use Ruff only (no Black)
+crow --ruff-only
+
+# Dry run (see what would change)
+crow --dry-run
+```
+
+### Options
+
+```
+--project-root PATH     Project root directory (default: .)
+--python VERSION        Python version for CI/tools (default: 3.11)
+--ruff-only            Skip Black; use Ruff formatter only
+--dry-run              Show what would change without making changes
+--no-format            Skip formatting existing code files
+--no-install-hooks     Skip installing pre-commit hooks
+--no-venv              Skip creating .venv; use system tools instead
+--initialize, --init, -i  Initialize a new Python project
+  --name NAME          Tool name (for --initialize, non-interactive)
+  --description DESC   Tool description (for --initialize, non-interactive)
+  --version VER        Initial version (for --initialize, non-interactive)
+```
+
+### Examples
+
+**Set up formatting for an existing project:**
+```bash
+cd my-python-project
+crow
+```
+
+**Initialize a new CLI tool:**
+```bash
+mkdir my-tool && cd my-tool
+git init
+crow --initialize
+# Prompts for name, description, version
+```
+
+**Set up with Python 3.12:**
+```bash
+crow --python 3.12
+```
+
+**Ruff-only setup (faster, simpler):**
+```bash
+crow --ruff-only
+```
+
+**Non-interactive initialization:**
+```bash
+crow --initialize \
+  --name mytool \
+  --description "My awesome CLI tool" \
+  --version 0.2.0
+```
+
+## What Gets Created
+
+Crow creates/updates the following files:
+
+### Configuration Files
+
+- **`.editorconfig`** - Editor settings (LF, 4-space indent, etc.)
+- **`.pre-commit-config.yaml`** - Pre-commit hooks (Ruff + optional Black)
+- **`pyproject.toml`** - Ruff/Black config and (with `--initialize`) project metadata
+- **`.github/workflows/ci.yml`** - GitHub Actions CI workflow
+- **`requirements-dev.txt`** - Development dependencies
+
+### With `--initialize`
+
+- **`main.py`** - CLI tool template with argparse
+- **`pyproject.toml`** - Includes `[project]` section with entry point for Feza compatibility
+
+### Virtual Environment
+
+- **`.venv/`** - Created automatically with Ruff, pre-commit (and Black if not `--ruff-only`)
+
+## Integration with Feza
+
+Crow creates Feza-compatible entry points:
+
+```toml
+[project.scripts]
+your-tool = "main:main"
+```
+
+This allows Feza to:
+- Auto-detect Python projects
+- Generate `create_python_binaries.sh`
+- Build and release your tool
+
+**Complete workflow:**
+```bash
+# 1. Initialize project with Crow
+crow --initialize --name mytool
+
+# 2. Develop your tool...
+
+# 3. Release with Feza
+feza plan --name mytool v1.0.0
+feza build --name mytool v1.0.0
+feza github --name mytool v1.0.0
+feza tap --name mytool --formula Mytool v1.0.0
+```
+
+## Configuration
+
+### Ruff Configuration
+
+Crow sets up Ruff with:
+- Line length: 100
+- Target Python: 3.11 (configurable with `--python`)
+- Lint rules: E, F, I, N, W, UP
+- Import sorting with isort
+- Double quotes
+
+### Black Configuration (if not `--ruff-only`)
+
+- Line length: 100
+- Target Python: 3.11
+- Same exclusions as Ruff
+
+### CI Workflow
+
+Runs on push/PR to `main`, `master`, or `develop`:
+- Checks formatting with Ruff
+- Lints with Ruff
+- Optionally checks with Black
+
+## Troubleshooting
+
+### "ruff not found"
+
+Crow automatically creates `.venv` and installs dependencies. If this fails:
+- Ensure Python 3.11+ is available
+- Check that `pip` is working
+- Use `--no-venv` if you prefer system tools
+
+### "working tree is dirty"
+
+Crow checks for uncommitted changes before running (in some contexts). Commit or stash changes first:
+```bash
+git add -A && git commit -m "Your changes"
+# or
+git stash
+```
+
+### Pre-commit hooks not working
+
+Ensure hooks are installed:
+```bash
+pre-commit install
+```
+
+Or let Crow do it automatically (default behavior).
+
+## Requirements
+
+- Python 3.11 or higher
+- Git (for pre-commit hooks)
+- `pip` (usually comes with Python)
+
+Optional:
+- Homebrew (for Homebrew installation)
+- GitHub CLI `gh` (for some advanced workflows)
+
+## Idempotency
+
+Crow is designed to be idempotent:
+- Won't overwrite existing configuration
+- Only adds missing pieces
+- Safe to run multiple times
+- Merges new sections into existing files
+
+You can run `crow` multiple times on the same project without fear of breaking existing configurations.
+
+## Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Report bugs**: Open an issue describing the problem
+2. **Suggest features**: Share your ideas for improvements
+3. **Submit PRs**: Fork, make changes, and open a pull request
+
+Please ensure:
+- Code follows the project's style (run `crow` on your changes!)
+- Tests pass (if applicable)
+- Documentation is updated
+
+## License
+
+MIT License - see LICENSE file for details.
+
+---
+
+**Made with ❤️ for Python developers**
+
