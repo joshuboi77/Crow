@@ -526,7 +526,10 @@ def ensure_ci(root: Path, ruff_only: bool, pyver: str, dry: bool):
                 changed = True
             elif "pip install black" not in txt and "pip install ruff" in txt:
                 # Black step exists but dependency is missing - add it
-                txt = txt.replace("pip install ruff", f"pip install ruff{BLACK_DEP_STEP}")
+                # Use regex to ensure we match the exact line and replace it properly
+                import re
+
+                txt = re.sub(r"(pip install ruff)", r"\1\n        pip install black", txt, count=1)
                 changed = True
         if changed and not dry:
             p.write_text(txt)
