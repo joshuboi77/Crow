@@ -11,6 +11,7 @@ TARGET_DIR="build"
 mkdir -p "${TARGET_DIR}/macos-arm64"
 mkdir -p "${TARGET_DIR}/macos-amd64"
 mkdir -p "${TARGET_DIR}/linux-amd64"
+mkdir -p "${TARGET_DIR}/windows-amd64"
 
 # Create wrapper scripts for each target
 cat > "${TARGET_DIR}/macos-arm64/${NAME}" << 'EOFWRAPPER'
@@ -37,9 +38,23 @@ if __name__ == "__main__":
     sys.exit(main())
 EOFWRAPPER
 
+cat > "${TARGET_DIR}/windows-amd64/${NAME}.bat" << 'EOFWRAPPER'
+@echo off
+python -c "import sys; sys.path.insert(0, '.'); from main import main; sys.exit(main())" %*
+EOFWRAPPER
+
+cat > "${TARGET_DIR}/windows-amd64/${NAME}.py" << 'EOFWRAPPER'
+#!/usr/bin/env python3
+import sys
+from main import main
+if __name__ == "__main__":
+    sys.exit(main())
+EOFWRAPPER
+
 chmod +x "${TARGET_DIR}/macos-arm64/${NAME}"
 chmod +x "${TARGET_DIR}/macos-amd64/${NAME}"
 chmod +x "${TARGET_DIR}/linux-amd64/${NAME}"
+chmod +x "${TARGET_DIR}/windows-amd64/${NAME}.py"
 
 echo "Created wrapper scripts for ${NAME} in ${TARGET_DIR}/"
 echo "These will be packaged by Feza as 'binaries'"

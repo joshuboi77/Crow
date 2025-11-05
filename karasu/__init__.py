@@ -229,6 +229,65 @@ def infer_name_from_directory(root: Path) -> str:
     return root.name.lower().replace(" ", "-").replace("_", "-")
 
 
+def detect_package_structure(root: Path) -> tuple[str | None, Path | None]:
+    """
+    Detect if project has a package structure.
+
+    Returns:
+        tuple: (package_name, package_path) if package found, (None, None) otherwise.
+        Package name is normalized (hyphens converted to underscores for Python module names).
+    """
+    # Look for directories that look like Python packages (have __init__.py)
+    for item in root.iterdir():
+        if item.is_dir() and not item.name.startswith("."):
+            # Check if it's a Python package (has __init__.py)
+            init_file = item / "__init__.py"
+            if init_file.exists():
+                # Normalize package name: hyphens to underscores for Python module names
+                package_name = item.name.replace("-", "_")
+                return (package_name, item)
+
+    # Also check if pyproject.toml specifies packages
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            import tomli  # type: ignore
+
+            with open(pyproject, "rb") as f:
+                data = tomli.load(f)
+                if "tool" in data and "setuptools" in data["tool"]:
+                    packages = data["tool"]["setuptools"].get("packages", [])
+                    if packages and isinstance(packages, list) and len(packages) > 0:
+                        # Get the first package name - use original directory name, not normalized
+                        package_name_from_toml = packages[0]
+                        package_path = root / package_name_from_toml
+                        if package_path.exists() and (package_path / "__init__.py").exists():
+                            # Normalize for Python imports (hyphens to underscores)
+                            package_name = package_name_from_toml.replace("-", "_")
+                            return (package_name, package_path)
+        except ImportError:
+            try:
+                import tomllib  # Python 3.11+
+
+                with open(pyproject, "rb") as f:
+                    data = tomllib.load(f)
+                    if "tool" in data and "setuptools" in data["tool"]:
+                        packages = data["tool"]["setuptools"].get("packages", [])
+                        if packages and isinstance(packages, list) and len(packages) > 0:
+                            # Get the first package name - use original directory name, not normalized
+                            package_name_from_toml = packages[0]
+                            package_path = root / package_name_from_toml
+                            if package_path.exists() and (package_path / "__init__.py").exists():
+                                # Normalize for Python imports (hyphens to underscores)
+                                package_name = package_name_from_toml.replace("-", "_")
+                                return (package_name, package_path)
+            except ImportError:
+                # No TOML parser available, skip this check
+                pass
+
+    return (None, None)
+
+
 def validate_name(name: str) -> str:
     """Validate and normalize tool name."""
     # Remove invalid characters, replace spaces/underscores with hyphens
@@ -250,19 +309,37 @@ def validate_version(version: str) -> str:
 
 def initialize_project(
     root: Path, name: str | None, description: str | None, version: str | None, dry: bool
-) -> tuple[str, str, str]:
-    """Initialize new Python project. Returns (name, description, version)."""
-    main_py = root / "main.py"
+) -> tuple[str, str, str, str | None]:
+    """
+    Initialize new Python project. Returns (name, description, version, package_name).
+
+    package_name is the detected package name (normalized for Python) or None if flat structure.
+    """
+    # Detect package structure
+    package_name, package_path = detect_package_structure(root)
+
+    # Determine where to place main.py
+    if package_path:
+        # Package structure: place main.py inside package
+        main_py = package_path / "main.py"
+        package_name_normalized = package_name
+    else:
+        # Flat structure: place main.py at root
+        main_py = root / "main.py"
+        package_name_normalized = None
+
     main_py_was_created = False
 
     # Create main.py if missing
     if not main_py.exists() and not dry:
-        print(f"Creating {main_py.name}...")
+        location = "package" if package_path else "root"
+        print(f"Creating {main_py.name} in {location}...")
         # Use placeholders initially, will update after getting real values
         main_py.write_text(MAIN_PY_TEMPLATE.format(name="my-tool", description="CLI tool"))
         main_py_was_created = True
     elif not main_py.exists() and dry:
-        print(f"Would create {main_py.name}")
+        location = f"{package_path.name}/" if package_path else ""
+        print(f"Would create {location}{main_py.name}")
 
     # Interactive prompts if values not provided
     if not name:
@@ -297,9 +374,10 @@ def initialize_project(
         content = MAIN_PY_TEMPLATE.format(name=name, description=description)
         main_py.write_text(content)
         if main_py_was_created:
-            print(f"Updated {main_py.name} with tool name and description")
+            location = f"{package_path.name}/" if package_path else ""
+            print(f"Updated {location}{main_py.name} with tool name and description")
 
-    return name, description, version
+    return name, description, version, package_name_normalized
 
 
 def ensure_pyproject(
@@ -310,9 +388,23 @@ def ensure_pyproject(
     project_name: str | None = None,
     project_description: str | None = None,
     project_version: str | None = None,
+    package_name: str | None = None,
 ) -> bool:
-    """Ensure pyproject.toml exists with all necessary sections."""
+    """
+    Ensure pyproject.toml exists with all necessary sections.
+
+    package_name: Normalized package name (with underscores) if package structure exists.
+    """
     p = root / "pyproject.toml"
+
+    # Determine entry point format
+    if package_name:
+        # Package structure: use {package}.main:main
+        entry_point = f"{package_name}.main:main"
+    else:
+        # Flat structure: use main:main
+        entry_point = "main:main"
+
     if p.exists():
         txt = p.read_text()
         changed = False
@@ -326,7 +418,7 @@ description = "{project_description or "CLI tool"}"
 requires-python = ">={pyver}"
 
 [project.scripts]
-{project_name} = "main:main"
+{project_name} = "{entry_point}"
 
 """
             # Insert after [build-system] if it exists, otherwise at the start
@@ -339,7 +431,7 @@ requires-python = ">={pyver}"
             # Add entry point if [project] exists but no scripts
             scripts_block = f"""
 [project.scripts]
-{project_name} = "main:main"
+{project_name} = "{entry_point}"
 """
             # Find [project] section and add scripts after it
             if "[project]" in txt:
@@ -390,7 +482,7 @@ description = "{project_description or "CLI tool"}"
 requires-python = ">={pyver}"
 
 [project.scripts]
-{project_name} = "main:main"
+{project_name} = "{entry_point}"
 
 """
 
@@ -662,13 +754,33 @@ def main():
     project_name = None
     project_description = None
     project_version = None
+    package_name = None
     if args.initialize:
-        project_name, project_description, project_version = initialize_project(
+        project_name, project_description, project_version, package_name = initialize_project(
             root, args.name, args.description, args.version, args.dry_run
         )
         if not args.dry_run:
             print(f"\nInitializing project: {project_name} v{project_version}")
             print(f"Description: {project_description}")
+            if package_name:
+                print(f"Package structure detected: {package_name}/")
+    else:
+        # Detect package structure even in non-initialize mode
+        detected_package_name, _ = detect_package_structure(root)
+        package_name = detected_package_name
+
+        # Check if main.py exists at root but should be in package
+        root_main = root / "main.py"
+        if root_main.exists() and package_name:
+            package_path = root / package_name
+            package_main = package_path / "main.py"
+            if not package_main.exists():
+                if not args.dry_run:
+                    print(f"Moving main.py from root to {package_name}/ package...")
+                    package_main.write_text(root_main.read_text())
+                    root_main.unlink()
+                else:
+                    print(f"Would move main.py from root to {package_name}/ package")
 
     # Create venv and install dependencies (unless --no-venv)
     venv_python = None
@@ -689,6 +801,7 @@ def main():
                 project_name,
                 project_description,
                 project_version,
+                package_name,
             ),
         )
     )
