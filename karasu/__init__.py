@@ -614,8 +614,9 @@ def get_tool_command(root: Path, venv_python: Path | None, tool: str) -> list[st
             tool_path = venv_python.parent / tool
         if tool_path.exists():
             return [str(tool_path)]
-        # Fallback to python -m
-        return [str(venv_python), "-m", tool]
+        # Fallback to python -m (convert hyphens to underscores for module names)
+        module_name = tool.replace("-", "_")
+        return [str(venv_python), "-m", module_name]
     # Use system PATH
     return [tool]
 
