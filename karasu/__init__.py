@@ -370,14 +370,6 @@ def initialize_project(
     root: Path, name: str | None, description: str | None, version: str | None, dry: bool
 ) -> tuple[str, str, str, str | None]:
     """
-<<<<<<<< HEAD:karasu/main.py
-    Initialize new Python project. Always creates package structure.
-    Returns (name, description, version, package_name).
-
-    package_name is the normalized package name (hyphens converted to underscores for Python).
-    """
-    # Interactive prompts if values not provided (need name early to create package)
-========
     Initialize new Python project. Returns (name, description, version, package_name).
 
     package_name is the detected package name (normalized for Python) or None if flat structure.
@@ -409,7 +401,6 @@ def initialize_project(
         print(f"Would create {location}{main_py.name}")
 
     # Interactive prompts if values not provided
->>>>>>>> origin/main:karasu/__init__.py
     if not name:
         default_name = infer_name_from_directory(root)
         try:
@@ -440,7 +431,7 @@ def initialize_project(
     # Normalize package name: hyphens to underscores for Python module names
     package_name = name.replace("-", "_")
     package_dir = root / name  # Use original name (with hyphens) for directory
-    
+
     # Always create package structure
     package_path = package_dir
     main_py = package_path / "main.py"
@@ -470,16 +461,10 @@ def initialize_project(
         content = MAIN_PY_TEMPLATE.format(name=name, description=description)
         main_py.write_text(content)
         if main_py_was_created:
-<<<<<<<< HEAD:karasu/main.py
-            print(f"Updated {package_path.name}/{main_py.name} with tool name and description")
-
-    return name, description, version, package_name
-========
             location = f"{package_path.name}/" if package_path else ""
             print(f"Updated {location}{main_py.name} with tool name and description")
 
     return name, description, version, package_name_normalized
->>>>>>>> origin/main:karasu/__init__.py
 
 
 def ensure_pyproject(
@@ -880,55 +865,6 @@ def main():
             if package_name:
                 print(f"Package structure detected: {package_name}/")
     else:
-<<<<<<<< HEAD:karasu/main.py
-        # Detect or create package structure in non-initialize mode
-        detected_package_name, package_path = detect_package_structure(root)
-        
-        root_main = root / "main.py"
-        has_flat_structure = root_main.exists() and not package_path
-        
-        if has_flat_structure:
-            # Convert flat structure to package structure
-            # Infer package name from directory or main.py content
-            potential_name = infer_name_from_directory(root)
-            package_name = potential_name.replace("-", "_")
-            package_dir = root / potential_name
-            
-            # Set project_name for pyproject.toml update
-            if not project_name:
-                project_name = potential_name
-            
-            if not args.dry_run:
-                # Create package directory
-                package_dir.mkdir(parents=True, exist_ok=True)
-                init_file = package_dir / "__init__.py"
-                if not init_file.exists():
-                    init_file.touch()
-                
-                # Move main.py to package
-                package_main = package_dir / "main.py"
-                print(f"Converting flat structure to package: moving main.py to {package_dir.name}/")
-                package_main.write_text(root_main.read_text())
-                root_main.unlink()
-                
-                package_path = package_dir
-                print(f"Created package structure: {package_dir.name}/")
-            else:
-                print(f"Would convert flat structure to package: create {potential_name}/ and move main.py")
-                package_name = potential_name.replace("-", "_")
-                package_path = package_dir
-                if not project_name:
-                    project_name = potential_name
-        else:
-            package_name = detected_package_name
-            if package_name and not package_path:
-                # Package detected but path not found, try to find it
-                for item in root.iterdir():
-                    if item.is_dir() and not item.name.startswith("."):
-                        if item.name.replace("-", "_") == package_name:
-                            package_path = item
-                            break
-========
         # Detect package structure even in non-initialize mode
         detected_package_name, _ = detect_package_structure(root)
         package_name = detected_package_name
@@ -945,7 +881,6 @@ def main():
                     root_main.unlink()
                 else:
                     print(f"Would move main.py from root to {package_name}/ package")
->>>>>>>> origin/main:karasu/__init__.py
 
     # Create venv and install dependencies (unless --no-venv)
     venv_python = None
