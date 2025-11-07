@@ -15,7 +15,9 @@
     "karasu",
     "cursor",
     "python",
-    "formatting"
+    "formatting",
+    "ruff",
+    "black"
   ],
   "author": "",
   "license": "MIT",

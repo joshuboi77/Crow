@@ -56,3 +56,12 @@ htmlcov/
 .env
 .env.local
 
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Auto-generated files
+create_python_binaries.sh
+

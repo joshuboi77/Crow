@@ -136,7 +136,7 @@ function runKarasu(
       cwd: workingDir,
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,  // Required for Windows command execution
+      shell: true,
     });
 
     let stdout = "";
@@ -198,86 +198,35 @@ function registerTool(
 
 // Tool schemas using Zod
 const SetupSchema = z.object({
-  projectRoot: z
-    .string()
-    .optional()
-    .describe("Project root directory (default: current directory)"),
-  python: z
-    .string()
-    .optional()
-    .describe("Python version for CI/tools (default: 3.11)"),
-  ruffOnly: z
-    .boolean()
-    .optional()
-    .describe("Skip Black; use Ruff formatter only"),
-  dryRun: z
-    .boolean()
-    .optional()
-    .describe("Show what would be done without making changes"),
-  noFormat: z
-    .boolean()
-    .optional()
-    .describe("Skip formatting existing code files"),
-  noInstallHooks: z
-    .boolean()
-    .optional()
-    .describe("Skip installing pre-commit hooks"),
-  noVenv: z
-    .boolean()
-    .optional()
-    .describe("Skip creating .venv; use system tools instead"),
-  cwd: z.string().optional().describe("Working directory (default: auto-detect project root)"),
+  projectRoot: z.string().optional().describe("Project root directory (default: auto-detect)"),
+  python: z.string().optional().describe("Python version for CI/tools (default: 3.11)"),
+  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only"),
+  dryRun: z.boolean().optional().describe("Show what would change without making changes"),
+  noFormat: z.boolean().optional().describe("Skip formatting existing code files"),
+  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks"),
+  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead"),
 });
 
 const InitializeSchema = z.object({
-  name: z.string().optional().describe("Tool name (non-interactive mode)"),
-  description: z
-    .string()
-    .optional()
-    .describe("Tool description (non-interactive mode)"),
-  version: z
-    .string()
-    .optional()
-    .describe("Initial version (non-interactive mode, default: 0.1.0)"),
-  projectRoot: z
-    .string()
-    .optional()
-    .describe("Project root directory (default: current directory)"),
-  python: z
-    .string()
-    .optional()
-    .describe("Python version for CI/tools (default: 3.11)"),
-  ruffOnly: z
-    .boolean()
-    .optional()
-    .describe("Skip Black; use Ruff formatter only"),
-  dryRun: z
-    .boolean()
-    .optional()
-    .describe("Show what would be done without making changes"),
-  noFormat: z
-    .boolean()
-    .optional()
-    .describe("Skip formatting existing code files"),
-  noInstallHooks: z
-    .boolean()
-    .optional()
-    .describe("Skip installing pre-commit hooks"),
-  noVenv: z
-    .boolean()
-    .optional()
-    .describe("Skip creating .venv; use system tools instead"),
-  cwd: z.string().optional().describe("Working directory (default: auto-detect project root)"),
+  name: z.string().optional().describe("Tool name (for non-interactive mode)"),
+  description: z.string().optional().describe("Tool description (for non-interactive mode)"),
+  version: z.string().optional().describe("Initial version (for non-interactive mode, default: 0.1.0)"),
+  projectRoot: z.string().optional().describe("Project root directory (default: auto-detect)"),
+  python: z.string().optional().describe("Python version for CI/tools (default: 3.11)"),
+  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only"),
+  dryRun: z.boolean().optional().describe("Show what would change without making changes"),
+  noFormat: z.boolean().optional().describe("Skip formatting existing code files"),
+  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks"),
+  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead"),
 });
 
 // Register all tools
 registerTool(
   "karasu_setup",
-  "Set up Ruff/Black formatting, pre-commit hooks, and CI for any Python project (libraries, web apps, CLI tools, scripts, etc.). Works on existing projects. Safe to run multiple times - only adds missing configuration.",
+  "Set up formatting infrastructure for an existing Python project (Ruff, Black, pre-commit, CI)",
   SetupSchema,
   (input) => {
     const args: string[] = [];
-    // Only pass --project-root if explicitly provided (let Karasu default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
@@ -291,14 +240,13 @@ registerTool(
 
 registerTool(
   "karasu_initialize",
-  "Create a new Python CLI tool from scratch: generates main.py template with argparse, sets up formatting/CI, and creates command-line entry points. Use this when starting a brand new CLI tool project.",
+  "Initialize a new Python CLI project with formatting infrastructure",
   InitializeSchema,
   (input) => {
-    const args: string[] = ["--initialize"];
+    const args = ["--initialize"];
     if (input.name) args.push("--name", input.name);
     if (input.description) args.push("--description", input.description);
     if (input.version) args.push("--version", input.version);
-    // Only pass --project-root if explicitly provided (let Karasu default otherwise)
     if (input.projectRoot) args.push("--project-root", input.projectRoot);
     if (input.python) args.push("--python", input.python);
     if (input.ruffOnly) args.push("--ruff-only");
@@ -395,7 +343,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     // Convert to Karasu CLI args
     const karasuArgs = tool.toArgs(validatedInput);
-    const cwd = validatedInput.cwd || validatedInput.projectRoot;
+    const cwd = validatedInput.projectRoot;
 
     // Execute Karasu command
     const result = await runKarasu(karasuArgs, cwd);

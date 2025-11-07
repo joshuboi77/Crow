@@ -2,9 +2,12 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["karasu"]
+
 [project]
 name = "karasu"
-version = "0.1.0"
+version = "0.2.2"
 description = "One-shot formatter enforcer for Python repos"
 requires-python = ">=3.11"
 
