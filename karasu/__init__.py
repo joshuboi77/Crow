@@ -299,65 +299,6 @@ def validate_name(name: str) -> str:
     return normalized or "my-tool"
 
 
-def detect_package_structure(root: Path) -> tuple[str | None, Path | None]:
-    """
-    Detect if project has a package structure.
-
-    Returns:
-        tuple: (package_name, package_path) if package found, (None, None) otherwise.
-        Package name is normalized (hyphens converted to underscores for Python module names).
-    """
-    # Look for directories that look like Python packages (have __init__.py)
-    for item in root.iterdir():
-        if item.is_dir() and not item.name.startswith("."):
-            # Check if it's a Python package (has __init__.py)
-            init_file = item / "__init__.py"
-            if init_file.exists():
-                # Normalize package name: hyphens to underscores for Python module names
-                package_name = item.name.replace("-", "_")
-                return (package_name, item)
-
-    # Also check if pyproject.toml specifies packages
-    pyproject = root / "pyproject.toml"
-    if pyproject.exists():
-        try:
-            import tomli  # type: ignore
-
-            with open(pyproject, "rb") as f:
-                data = tomli.load(f)
-                if "tool" in data and "setuptools" in data["tool"]:
-                    packages = data["tool"]["setuptools"].get("packages", [])
-                    if packages and isinstance(packages, list) and len(packages) > 0:
-                        # Get the first package name - use original directory name, not normalized
-                        package_name_from_toml = packages[0]
-                        package_path = root / package_name_from_toml
-                        if package_path.exists() and (package_path / "__init__.py").exists():
-                            # Normalize for Python imports (hyphens to underscores)
-                            package_name = package_name_from_toml.replace("-", "_")
-                            return (package_name, package_path)
-        except ImportError:
-            try:
-                import tomllib  # Python 3.11+
-
-                with open(pyproject, "rb") as f:
-                    data = tomllib.load(f)
-                    if "tool" in data and "setuptools" in data["tool"]:
-                        packages = data["tool"]["setuptools"].get("packages", [])
-                        if packages and isinstance(packages, list) and len(packages) > 0:
-                            # Get the first package name - use original directory name, not normalized
-                            package_name_from_toml = packages[0]
-                            package_path = root / package_name_from_toml
-                            if package_path.exists() and (package_path / "__init__.py").exists():
-                                # Normalize for Python imports (hyphens to underscores)
-                                package_name = package_name_from_toml.replace("-", "_")
-                                return (package_name, package_path)
-            except ImportError:
-                # No TOML parser available, skip this check
-                pass
-
-    return (None, None)
-
-
 def validate_version(version: str) -> str:
     """Validate version format (basic semver check)."""
     if re.match(r"^\d+\.\d+\.\d+", version):
