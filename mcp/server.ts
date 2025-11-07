@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 const server = new Server(
   {
     name: "karasu-mcp",
-    version: "0.1.0",
+    version: "0.3.2",
   },
   {
     capabilities: {
@@ -34,6 +34,18 @@ const server = new Server(
     },
   }
 );
+
+/**
+ * MCP TOOLS FOR AI AGENTS:
+ * 
+ * When user asks to "format this project", "set up ruff/black", "add formatting",
+ * or similar formatting-related tasks, use karasu_setup.
+ * 
+ * When user asks to "create new Python project", "initialize CLI tool", "bootstrap project",
+ * or wants to start a new project, use karasu_initialize.
+ * 
+ * These tools are PREFERRED over running 'karasu' CLI commands directly.
+ */
 
 /**
  * Detect project root directory by looking for git root or project indicators.
@@ -198,32 +210,32 @@ function registerTool(
 
 // Tool schemas using Zod
 const SetupSchema = z.object({
-  projectRoot: z.string().optional().describe("Project root directory (default: auto-detect)"),
-  python: z.string().optional().describe("Python version for CI/tools (default: 3.11)"),
-  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only"),
-  dryRun: z.boolean().optional().describe("Show what would change without making changes"),
-  noFormat: z.boolean().optional().describe("Skip formatting existing code files"),
-  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks"),
-  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead"),
+  projectRoot: z.string().optional().describe("Project root directory. Auto-detected from git root or current directory if not provided. Usually omit to use auto-detection."),
+  python: z.string().optional().describe("Python version for CI/tools (default: 3.11). Use '3.12' or '3.13' for newer projects. Format: '3.11', '3.12', etc."),
+  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only. Default: false (uses both Ruff and Black). Set to true for faster, simpler setup with just Ruff."),
+  dryRun: z.boolean().optional().describe("Show what would change without making changes. Default: false. Set to true to preview changes before applying."),
+  noFormat: z.boolean().optional().describe("Skip formatting existing code files. Default: false (formats code automatically). Set to true only if you want to skip formatting."),
+  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks. Default: false (installs hooks automatically). Set to true only if you want to skip hook installation."),
+  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead. Default: false (creates .venv automatically). Set to true only if you want to use system-wide tools instead of project venv."),
 });
 
 const InitializeSchema = z.object({
-  name: z.string().optional().describe("Tool name (for non-interactive mode)"),
-  description: z.string().optional().describe("Tool description (for non-interactive mode)"),
-  version: z.string().optional().describe("Initial version (for non-interactive mode, default: 0.1.0)"),
-  projectRoot: z.string().optional().describe("Project root directory (default: auto-detect)"),
-  python: z.string().optional().describe("Python version for CI/tools (default: 3.11)"),
-  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only"),
-  dryRun: z.boolean().optional().describe("Show what would change without making changes"),
-  noFormat: z.boolean().optional().describe("Skip formatting existing code files"),
-  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks"),
-  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead"),
+  name: z.string().optional().describe("Tool name (required for non-interactive mode). Will prompt interactively if not provided. Use lowercase with hyphens (e.g., 'my-tool')."),
+  description: z.string().optional().describe("Tool description (required for non-interactive mode). Will prompt interactively if not provided. Short description of what the tool does."),
+  version: z.string().optional().describe("Initial version (default: 0.1.0). Use semantic versioning format (e.g., '0.1.0', '1.0.0')."),
+  projectRoot: z.string().optional().describe("Project root directory. Auto-detected from git root or current directory if not provided. Usually omit to use auto-detection."),
+  python: z.string().optional().describe("Python version for CI/tools (default: 3.11). Use '3.12' or '3.13' for newer projects. Format: '3.11', '3.12', etc."),
+  ruffOnly: z.boolean().optional().describe("Skip Black; use Ruff formatter only. Default: false (uses both Ruff and Black). Set to true for faster, simpler setup with just Ruff."),
+  dryRun: z.boolean().optional().describe("Show what would change without making changes. Default: false. Set to true to preview changes before applying."),
+  noFormat: z.boolean().optional().describe("Skip formatting existing code files. Default: false (formats code automatically). Set to true only if you want to skip formatting."),
+  noInstallHooks: z.boolean().optional().describe("Skip installing pre-commit hooks. Default: false (installs hooks automatically). Set to true only if you want to skip hook installation."),
+  noVenv: z.boolean().optional().describe("Skip creating .venv; use system tools instead. Default: false (creates .venv automatically). Set to true only if you want to use system-wide tools instead of project venv."),
 });
 
 // Register all tools
 registerTool(
   "karasu_setup",
-  "Set up formatting infrastructure for an existing Python project (Ruff, Black, pre-commit, CI)",
+  "[MCP TOOL - USE THIS] Set up formatting infrastructure for an existing Python project. Use when user asks to 'format this project', 'set up ruff/black', 'add formatting', 'enforce code style', or 'configure linting'. Creates .venv, configures Ruff/Black, pre-commit hooks, CI workflows, and formats existing code. Preferred over 'karasu' CLI command for AI agents.",
   SetupSchema,
   (input) => {
     const args: string[] = [];
@@ -240,7 +252,7 @@ registerTool(
 
 registerTool(
   "karasu_initialize",
-  "Initialize a new Python CLI project with formatting infrastructure",
+  "[MCP TOOL - USE THIS] Initialize a new Python CLI project with formatting infrastructure. Use when user asks to 'create new Python project', 'initialize CLI tool', 'bootstrap project', 'start new tool', or 'create Python CLI'. Creates main.py template, pyproject.toml with entry points (Feza-compatible), and all formatting config. Preferred over 'karasu --initialize' CLI command for AI agents.",
   InitializeSchema,
   (input) => {
     const args = ["--initialize"];
